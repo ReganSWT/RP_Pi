@@ -1,15 +1,21 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+
 
 public class piEst
 {
 
       static void Main()
       {
+        List<double> guesses = new List<double>(); //Create a list to keep track of the approximations
 
         double piApprox = 0; //Value to store the best approximation of pi
+        double piAvg = 0; //Used to find the average value for pi
+
+        RandomGen2 rand = new RandomGen2(); //Creates an instance of the custom thread safe random class
 
         Console.WriteLine("How many points would you like to genearate? (Between 10 Thousand and 10 Million)");
           int pointsCount = reqInt();
@@ -17,19 +23,20 @@ public class piEst
           Console.WriteLine("How many approximations do you wish to make? (pick 10 for your first try)");
             int approxCount = reqInt();
 
-        Parallel.For(1, approxCount, (j, loop) => //Run a loop in parallel to make multiple approximations of pi and pick the closest one
+        Parallel.For(1, approxCount + 1, (j, loop) => //Run a loop in parallel to make multiple approximations of pi and pick the closest one
         {
           int circCount = 0; //To keep track of the number of points inside of an imaginary circle
 
-          Parallel.For(1, pointsCount, (i, state) => //Creates a bunch of imaginary points
+          Parallel.For(1, pointsCount + 1, (i, state) => //Creates a bunch of imaginary points (Plus one as the upper range is exclusive)
           {
-            double x = ( (double)RandomGen3.Next() / (double)2147483647 ) - 0.5; //generates an x and y value with a range of -0.5 to 0.5
-            double y = ( (double)RandomGen3.Next() / (double)2147483647 ) - 0.5; //We divide by the maximum value this number could be to get a range of 0 - 1
 
-              double xSqr = Math.Pow(x, 2);
-              double ySqr = Math.Pow(y, 2);
+            double x = ( rand.NextDouble() ) - 0.5; //generates an x and y value with a range of -0.5 to 0.5
+            double y = ( rand.NextDouble() ) - 0.5;
 
-            double dist = Math.Pow(xSqr + ySqr, 0.5); //Gets the magnitude distance of the point from the origin
+              x = Math.Pow(x, 2);
+              y = Math.Pow(y, 2);
+
+            double dist = Math.Pow(x + y, 0.5); //Gets the magnitude distance of the point from the origin
 
               if(dist <= 0.5) //If the distance is less than the radius of our imaginary circle, then the point is within that circle...
                 Interlocked.Increment(ref circCount); //and so we add one to the circle count
@@ -37,14 +44,23 @@ public class piEst
 
         double tempPi = (4 * (double)circCount) / (double)pointsCount; //Formula to generate our approximation
 
-          if(Math.Pow(tempPi - 3.141592653589793, 2) < Math.Pow(piApprox - 3.141592653589793, 2)) //If this guess is better than our current best guess...
-            piApprox = tempPi; //Replace it as the new best guess
+        guesses.Add(tempPi); //Add the approximation to the list of guesses
 
-          Console.WriteLine(j + " : " + tempPi); //Write this approximation to the consle (purely for fun)
+        Console.WriteLine(j + " : " + tempPi); //Write this approximation to the consle (purely for fun)
+
         });
 
-        Console.WriteLine(piApprox); //Finally write the best approximation to console
-        Console.ReadLine();
+        foreach(double d in guesses)
+        {
+            if(Math.Pow(d - Math.PI, 2) < Math.Pow(piApprox - Math.PI, 2)) //If this guess is better than our current best guess...
+              piApprox = d; //Replace it as the new best guess
+
+            piAvg += d; //Add this value of pi to the rolling average
+        }
+
+        Console.WriteLine("Best Guess : " + piApprox); //Print the best approximation to the console
+        Console.WriteLine("Average Guess : " + piAvg / approxCount); //Print the average of all the guesses
+        Console.ReadLine(); //Prevents the console closing immedietley afterwards
       }
 
       public static int reqInt()
@@ -54,24 +70,19 @@ public class piEst
         try
         { return int.Parse( Console.ReadLine() ); } //The number of points generated (we parse to convert the string response to an int)
 
-        catch
-        {
-          Console.WriteLine("Enter a valid Number");
-            goto Retry;
+        catch { Console.WriteLine("Enter a valid Number"); goto Retry;
         }
-
       }
-
 }
 
-  public static class RandomGen3 //This is a very complex random number generator required as the default random does not work in parallel
+public class RandomGen2
 {
-  private static RNGCryptoServiceProvider _global =
+    private static RNGCryptoServiceProvider _global =
       new RNGCryptoServiceProvider();
   [ThreadStatic]
   private static Random _local;
 
-  public static int Next()
+  public double NextDouble()
   {
       Random inst = _local;
       if (inst == null)
@@ -81,6 +92,6 @@ public class piEst
           _local = inst = new Random(
               BitConverter.ToInt32(buffer, 0));
       }
-      return inst.Next();
-  } //Note: The diviser in the last step is what I think the maximum value could be, if estimates are off, try and find a closer value for the upper range
+      return (double)inst.Next() / (double)Int32.MaxValue;
+  }
 }
